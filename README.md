@@ -1,0 +1,2 @@
+# Tenessee-Star-Experiment
+The dataset STAR_Students.csv is from the Tennessee Student Teacher Achievement Ratio (STAR) project. This randomized controlled trial was implemented in Tennessee to measure the impact of having a teacher-student ratio of 20 students, 30 students, or 30 students + a teacher's aide on student achievement. The file "STAR User Guide.pdf" is a user guide for the data, including variable definitions. This exercise is based on a real coding questions that were given to candidates for a full-time research associate position at the University of Chicago.
