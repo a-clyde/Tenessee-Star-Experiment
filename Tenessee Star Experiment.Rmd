@@ -1,0 +1,186 @@
+---
+title: "Tenessee Star Experiment"
+author: "Andrew Clyde"
+date: "December 11th, 2020"
+output:
+  pdf_document: default
+
+---
+
+# Tennessee Star Experiment (50 points)
+
+The dataset STAR_Students.csv is from the Tennessee Student Teacher Achievement Ratio (STAR) project. This randomized controlled trial was implemented in Tennessee to measure the impact of having a teacher-student ratio of 20 students, 30 students, or 30 students + a teacher's aide on student achievement. The file "STAR User Guide.pdf" is a user guide for the data, including variable definitions. 
+
+Note that this problem is based on a real coding exercise that was given to candidates for a full-time research associate position at the University of Chicago. 
+
+```{r include=FALSE}
+library(pacman)
+p_load(readr, broom, datasets, dbplyr, devtools, dplyr, forcats, ggplot2, haven,  markdown, pillar, purrr, RColorBrewer, rlang, rmarkdown, stargazer, stringr, tibble, tidyr, tidyverse, tinytex, usethis, viridisLite, knitr, caTools, formatR, tm, wordcloud, sandwich, lubridate, lmtest, estimatr, reshape2, zoo, scales, AER, janitor, pander, cluster, yaml, lfe)
+```
+
+1. (5 points) The variable gkclasstype indicates treatment status in kindergarten. Use this variable to generate an indicator for being in a small class in kindergarten (so this variable is 1 if in a small class and 0 if in a regular class with or without an aide). Set this indicator to missing if equal to "NA". How many students were in small classes in kindergarten? 
+
+## In kindergarten there were 1900 kids that were in small classes. gkclasstype will be a variable equal to 1 if in a small class, equal to 0 if in a regular class and equal to missing if the class size for that observation is NA. 
+
+```{r echo=TRUE}
+star <- read_csv("STAR_Students.csv")
+
+# Generate Indicator Variable
+star <- star %>% mutate(K =
+      case_when(gkclasstype == "SMALL CLASS"~1,
+      gkclasstype == "REGULAR CLASS"~0, 
+      gkclasstype == "REGULAR + AIDE CLASS"~0))
+
+# Generate new column equal to zero labeled missing
+star <- star %>% mutate(missing = 0)
+
+# Reference the K column against the missing column to generate missing observations
+star$missing[is.na(star$K)]<-"missing"
+
+# Filter out missing data entirely from data set 
+Non_Missing <- star %>% filter(missing==0)
+
+# Number of Students in Small Classes in Kindergarten 
+Q1 <- star %>% filter(K==1)
+dim(Q1)
+```
+
+## There were 1900 students in a small class in Kindergarten. 
+
+2. (15 points) Using the treatment status variable for kindergarten, gkclasstype, create a table showing whether or not student characteristics are balanced across treatment groups. Use observable characteristics that were determined prior to randomization. Report whether there are any statistical differences in observable characteristics across kindergarten treatment groups. Note that you will need to look through the documentation to select the baseline characteristics to include in the table.
+
+## I will use race and gender as baseline characteristics to include and conduct a balance test across the treatment and control groups. Create indicators for race and gender to see if they are balanced across treatment groups.  
+```{r echo=TRUE}
+Non_Missing <- Non_Missing %>% 
+  mutate(Male=ifelse(gender=='MALE',1,0))
+Non_Missing <- Non_Missing %>% 
+  mutate(White=ifelse(race=='WHITE',1,0))
+
+# Balance Test, Gender on Treatment Verse Control
+Gender <- lm(Male~K, data = Non_Missing)
+Gender_se <- sqrt(diag(vcovHC(Gender, type="HC1")))
+
+# Balance Test, Race on Treatment Verse Control
+Race <- lm(White~K, data = Non_Missing)
+Race_se <-  sqrt(diag(vcovHC(Race, type="HC1")))
+
+# Stargazer for Gender and Race Balance Test
+stargazer(Gender, Race, keep.stat = c('n', 'rsq'), 
+          se = list(Gender_se, Race_se), 
+          covariate.labels = c(), 
+          dep.var.labels=c(), type = 'text')
+```
+
+## Both estimates are not significant, therefor the demographics of gender and race are balanced across treatment and control groups. We do not have to worry about controlling for them or their implicit bias. 
+
+3. (15 points) How does performance on fourth grade reading (g4treadss) and math tests (g4tmathss) for those students assigned to a small class in kindergarten compare with those assigned to a regular-sized class (with or without an aide? Do students in smaller classes perform better? Be sure to comment on both the magnitude and precision of the estimates.
+
+## I will use factor variables for gkclasstype because now we are incorporating three different observations, small class, regular class and regular class + aide in Kindergarten on reading and math test scores in fourth grade. I will use the data set Non_Missing, in which I filtered out the missing observations.
+
+```{r echo=TRUE}
+# Reading Test Performance
+Reading <- lm(g4treadss~as.factor(gkclasstype), 
+              data = Non_Missing)
+Reading_se <-  sqrt(diag(vcovHC(Reading, type="HC1")))
+
+# Math Test Performance
+Math <- lm(g4tmathss~as.factor(gkclasstype), 
+           data = Non_Missing)
+Math_se <-  sqrt(diag(vcovHC(Math, type="HC1")))
+
+# Stargazer Table 
+stargazer(Reading, Math, keep.stat = c('n', 'rsq'), 
+          se = list(Reading_se, Math_se), 
+          covariate.labels = 
+          c('Regular Class', 'Small Class'), 
+          dep.var.labels=c('Reading Test', 
+          'Math Test'), type = 'text')
+```
+
+# Reading Test Scores 
+
+## A student in a regular class with no aide in first grade, on average would approximately do 0.322 test points worse than with an aide on a reading test in fourth grade, this estimate is not significant at any level and is tiny in magnitude. 
+
+## A student in a small class can expect on average to do approximately 5.937 points better than a student in a regular class with an aide, this is significant at 1% level, however an approximate 6 point difference is not a large increase considering the constant is 622. 
+
+# Math Test Scores
+
+## A student in a regular class with no aide in first grade, on average would approximately do 0.302 test points better than with an aide on a reading test in fourth grade, this estimate is not significant at any level and is tiny in magnitude. 
+
+## A student in a small class can expect on average to do approximately 2.636 points better than a student in a regular class with an aide, this is not significant at 1% level and is tiny in magnitude. 
+
+4. (5 points) The variables g1classtype, g2classtype, and g3classtype indicate treatment status in first, second, and third grade. How many sutdents were in a small class in kindergarten but in a regular class in 3rd grade? Generate a variable equal to the number of years that students were in small classes. Tabulate this variable against kindergarten treatment status.
+
+```{r echo=TRUE}
+# Generate Indicator Variable for first, second and third grade. 
+star <- star %>% mutate(First =
+      case_when(g1classtype == "SMALL CLASS"~1,
+      g1classtype == "REGULAR CLASS"~0, 
+      g1classtype == "REGULAR + AIDE CLASS"~0))
+
+star <- star %>% mutate(Second =
+      case_when(g2classtype == "SMALL CLASS"~1,
+      g2classtype == "REGULAR CLASS"~0, 
+      g2classtype == "REGULAR + AIDE CLASS"~0))
+
+star <- star %>% mutate(Third =
+      case_when(g3classtype == "SMALL CLASS"~1,
+      g3classtype == "REGULAR CLASS"~0, 
+      g3classtype == "REGULAR + AIDE CLASS"~0))
+
+star$K[is.na(star$gkclasstype)]<-0
+star$First[is.na(star$g1classtype)]<-0
+star$Second[is.na(star$g2classtype)]<-0
+star$Third[is.na(star$g3classtype)]<-"Missing"
+
+# Students in a small class in Kindergarten but a regular class in third grade
+star <- star %>% mutate(Students = ifelse(K==1 & 
+Third==0, 1, 0))
+Q4 <- star %>% filter(Students == 1)
+dim(Q4)
+
+star <- star %>% mutate(Third=
+      case_when(g3classtype == "SMALL CLASS"~1,
+      g3classtype == "REGULAR CLASS"~0, 
+      g3classtype == "REGULAR + AIDE CLASS"~0))
+
+# Now change Third back to zero if NA instead of missing
+star$Third[is.na(star$g3classtype)]<-0
+
+# Generate new column that adds up indicators of being in a small class or not. 
+star <- star %>% mutate(Years = K + 
+                          First + Second + Third)
+```
+
+## There were 121 students in a small class in Kindergarten and a reular class in third with or with or without an Aide.  
+
+5. (10 points) Does participation in more years of small classes make a greater difference in test scores? Comment on the precision of the estimates. 
+
+```{r echo=TRUE}
+# Years in small classes on math test results 
+Math_Years <- lm(g4tmathss~as.factor(Years), 
+                 data = star)
+Maths_se <-  sqrt(diag(vcovHC(Math_Years, type="HC1")))
+
+# Years in small classes on reading test results 
+Reading_Years <- lm(g4treadss~as.factor(Years), 
+                  data = star)
+Read_se <-  sqrt(diag(vcovHC(Reading_Years, type="HC1")))
+
+# Stargazer Table
+stargazer(Math_Years, Reading_Years, 
+          keep.stat = c('n', 'rsq'), 
+          se = list(Maths_se, Read_se), 
+          covariate.labels = c('One Year Small', 
+          'Two Years Small', 'Three Years Small', 
+          'Four Years Small'), 
+          dep.var.labels=c('Math Scores',
+          'Reading Scores'),
+          type = 'text')
+```
+
+## As years in small classes increase so do the precision and magnitude of the estimates for both math and reading. 
+
+## At three years of being in small classes you can expect to do on average approximately 6.206 test points better than someone who was only in regular classes on your fourth grade math test and on average approximately 4.833 test points better than someone who was only in regular classes on your fourth grade reading test. Both of these estimates are significant at the 5% distribution level and we would reject the null hypothesis that it has no effect. 
+
+## At four years of being in small classes you can expect to do on average approximately 13.053 test points better than someone who was only in regular classes on your fourth grade math test and on average approximately 17.599 test points better than someone who was only in regular classes on your fourth grade reading test. Both of these estimates are significant at the 1% distribution level and we would reject the null hypothesis that it has no effect. 
